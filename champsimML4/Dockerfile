@@ -45,9 +45,9 @@ RUN ./build_champsim.sh hashed_perceptron no no no no lru 1
 # Create directory for traces
 RUN mkdir -p /app/ChampSim/traces
 
-# Set environment variables for CUDA
-ENV PATH /usr/local/cuda/bin:${PATH}
-ENV LD_LIBRARY_PATH /usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+# Set environment variables for CUDA (fixed legacy format)
+ENV PATH=/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
 # Set default command
 CMD ["bash"]

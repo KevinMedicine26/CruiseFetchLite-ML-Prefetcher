@@ -8,13 +8,14 @@ services:
       - ./ChampSim/traces:/app/ChampSim/traces
       - ./ChampSim/results:/app/ChampSim/results
       - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
-   
     tty: true
     stdin_open: true
     command: tail -f /dev/null
-    # Add NVIDIA GPU support
+    # Add NVIDIA GPU support and memory limits
     deploy:
       resources:
+        limits:
+          memory: 13G
         reservations:
           devices:
             - driver: nvidia
