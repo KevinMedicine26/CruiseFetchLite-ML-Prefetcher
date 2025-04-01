@@ -1,0 +1,13 @@
+services:
+  champsim:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Mount specific directories for data persistence
+      - ./ChampSim/traces:/app/ChampSim/traces
+      - ./ChampSim/results:/app/ChampSim/results
+      - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
+    tty: true
+    stdin_open: true
+    command: tail -f /dev/null
