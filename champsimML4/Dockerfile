@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 # Set non-interactive installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -44,6 +44,10 @@ RUN ./build_champsim.sh hashed_perceptron no no no no lru 1
 
 # Create directory for traces
 RUN mkdir -p /app/ChampSim/traces
+
+# Set environment variables for CUDA
+ENV PATH /usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH /usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
 # Set default command
 CMD ["bash"]

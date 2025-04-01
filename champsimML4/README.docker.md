@@ -60,7 +60,7 @@ Once inside the container, you can use ChampSim as normal:
 
 ```bash
 cd /app/ChampSim
-python3 ml_prefetch_sim.py train ./traces/471.omnetpp-s0.txt.xz --model ./models/model_471.h5
+python3 ml_prefetch_sim.py train ./traces/471.omnetpp-s0.txt.xz --model ./model/model_471
 ```
 
 
@@ -68,7 +68,7 @@ python3 ml_prefetch_sim.py train ./traces/471.omnetpp-s0.txt.xz --model ./models
 
 ```bash
 cd /app/ChampSim
-python3 ml_prefetch_sim.py generate ./traces/471.omnetpp-s0.txt.xz prefetches_471.txt --model ./models/model_471.h5
+python3 ml_prefetch_sim.py generate ./traces/471.omnetpp-s0.txt.xz prefetches_471.txt --model ./model/model_471
 ```
 
 ### Building ChampSim
@@ -110,7 +110,7 @@ volumes:
   - ./ChampSim/traces:/app/ChampSim/traces
   - ./ChampSim/results:/app/ChampSim/results
   - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
-  - D:\ChampsimML4\traces:/app/ChampSim/external_traces  # Mount external traces folder
+  - D:\ChampsimML4\externaldata:/app/ChampSim/externaldata  # Mount external traces folder
 ```
 
 Then you can access these traces inside the container at `/app/ChampSim/external_traces`.
