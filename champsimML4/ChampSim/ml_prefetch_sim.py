@@ -432,7 +432,7 @@ def generate_command():
     parser.add_argument('load_trace', default=None)
     parser.add_argument('prefetch_file', default=None)
     parser.add_argument('--model', default=None, required=True)
-    parser.add_argument('--num-prefetch-warmup-instructions', default=default_warmup_instrs)
+    parser.add_argument('--num-prefetch-warmup-instructions', type=int, default=default_warmup_instrs)
 
     args = parser.parse_args(sys.argv[2:])
 
