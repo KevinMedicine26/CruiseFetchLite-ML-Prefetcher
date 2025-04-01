@@ -100,6 +100,32 @@ The following directories are mapped between your host machine and the Docker co
 - `./ChampSim/results` → `/app/ChampSim/results` - Simulation results will be stored here
 - `./ChampSim/prefetch_files` → `/app/ChampSim/prefetch_files` - Prefetch files will be stored here
 
+### Mounting Additional Trace Folders
+
+To mount the "D:\ChampsimML4\traces" folder to the Docker container, modify the `docker-compose.yml` file to add the following volume mapping:
+
+```yaml
+volumes:
+  - ./ChampSim:/app/ChampSim
+  - ./ChampSim/traces:/app/ChampSim/traces
+  - ./ChampSim/results:/app/ChampSim/results
+  - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
+  - D:\ChampsimML4\traces:/app/ChampSim/external_traces  # Mount external traces folder
+```
+
+Then you can access these traces inside the container at `/app/ChampSim/external_traces`.
+
+For Windows users, you may need to use the following format instead:
+
+```yaml
+volumes:
+  - ./ChampSim:/app/ChampSim
+  - ./ChampSim/traces:/app/ChampSim/traces
+  - ./ChampSim/results:/app/ChampSim/results
+  - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
+  - D:/ChampsimML4/traces:/app/ChampSim/external_traces  # Windows path format
+```
+
 ## Stopping the Docker Container
 
 To stop the Docker container:
