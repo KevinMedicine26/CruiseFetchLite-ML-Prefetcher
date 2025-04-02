@@ -11,7 +11,7 @@ services:
     tty: true
     stdin_open: true
     command: tail -f /dev/null
-    # Add NVIDIA GPU support and memory limits
+    # Memory configuration compatible with latest Docker Compose
     deploy:
       resources:
         limits:
