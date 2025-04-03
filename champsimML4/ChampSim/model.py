@@ -96,17 +96,17 @@ class CruiseFetchLITEModel(MLPrefetchModel):
         """Return default configuration for the model"""
         config = {
             # Model architecture parameters
-            'pc_embed_size': 32,        # Reduced from 64 for faster inference
-            'cluster_embed_size': 16,   # Reduced from 25 for faster inference
-            'offset_embed_size': 80,    # cluster_embed_size * num_experts
-            'num_experts': 5,           # Reduced from 100 for faster inference
-            'history_length': 3,        # Track 3 previous accesses
-            'num_pcs': 1024,            # Number of unique PCs to track
-            'num_clusters': 512,        # Number of behavioral clusters
-            'offset_size': 64,          # Page offsets (use 6 bits)
-            'num_candidates': 2,        # Number of candidate pages to consider
-            'dpf_history_length': 1,    # Length of DPF vector history
-            'offset_bits': 6,           # Number of bits for page offset
+            'pc_embed_size': 32,        # Reduced from 64 for faster inference [my default is 32]
+            'cluster_embed_size': 16,   # Reduced from 25 for faster inference [my default is 16]
+            'offset_embed_size': 80,    # cluster_embed_size * num_experts [my default is 80]
+            'num_experts': 5,           # Reduced from 100 for faster inference [my default is 5]
+            'history_length': 3,        # Track 3 previous accesses  [my default is 3]
+            'num_pcs': 1024,            # Number of unique PCs to track [my default is 1024]
+            'num_clusters': 512,        # Number of behavioral clusters [my default is 512]
+            'offset_size': 64,          # Page offsets (use 6 bits) [my default is 64]
+            'num_candidates': 2,        # Number of candidate pages to consider [my default is 2]
+            'dpf_history_length': 1,    # Length of DPF vector history [my default is 1]
+            'offset_bits': 6,           # Number of bits for page offset [my default is 6]
             
             # Prefetcher parameters
             'max_prefetches_per_id': 2  # Maximum prefetches per instruction ID
@@ -426,7 +426,8 @@ class CruiseFetchLITEModel(MLPrefetchModel):
         Args:
             data: List of (instr_id, cycle_count, load_addr, load_ip, llc_hit) tuples
         """
-        print(f"Training CruiseFetchLITE model on {len(data)} memory accesses")
+        print("\n=== Using CruiseFetchLITEModel.train from model.py ===")
+        print(f"Model configuration: {self.config}")
         
         # Initialize model if not already created
         if self.model is None:
@@ -564,7 +565,8 @@ class CruiseFetchLITEModel(MLPrefetchModel):
         Returns:
             List of (instr_id, prefetch_addr) tuples
         """
-        print(f"Generating prefetches for {len(data)} memory accesses")
+        print("\n=== Using CruiseFetchLITEModel.generate from model.py ===")
+        print(f"Model configuration: {self.config}")
         
         # Process data in streaming fashion
         prefetches = []

@@ -8,6 +8,8 @@ services:
       - ./ChampSim/traces:/app/ChampSim/traces
       - ./ChampSim/results:/app/ChampSim/results
       - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
+      - ./ChampSim/model.py:/app/ChampSim/model.py
+      - ./ChampSim/autorunCFlite.sh:/app/ChampSim/autorunCFlite.sh
     tty: true
     stdin_open: true
     command: tail -f /dev/null

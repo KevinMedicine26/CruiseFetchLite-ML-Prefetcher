@@ -426,13 +426,12 @@ class FixedCruiseFetchLITEModel(MLPrefetchModel):
         return [prefetch1, prefetch2]
     
     def train(self, data):
-        """
-        Train the model on the given trace data
+        """Train the model on the given data"""
+        print("\n=== Using FixedCruiseFetchLITEModel.train from fixed_model.py ===")
+        print(f"Model configuration: {self.config}")
         
-        Args:
-            data: List of (instr_id, cycle_count, load_addr, load_ip, llc_hit) tuples
-        """
-        print(f"Training CruiseFetchLITE model on {len(data)} memory accesses")
+        # Process the data to extract features
+        print(f"Training on {len(data)} samples")
         
         # Initialize model if not already created
         if self.model is None:
@@ -560,22 +559,15 @@ class FixedCruiseFetchLITEModel(MLPrefetchModel):
             print("Falling back to metadata-based approach")
     
     def generate(self, data):
-        """
-        Generate prefetches for the given trace data
-        
-        Args:
-            data: List of (instr_id, cycle_count, load_addr, load_ip, llc_hit) tuples
-            
-        Returns:
-            List of (instr_id, prefetch_addr) tuples
-        """
-        print(f"Generating prefetches for {len(data)} memory accesses")
-        
-        # Initialize metadata if not already done
-        if self.metadata_manager is None:
-            self.metadata_manager = DPFMetadataManager(self.config['num_candidates'])
+        """Generate prefetches for the given data"""
+        print("\n=== Using FixedCruiseFetchLITEModel.generate from fixed_model.py ===")
+        print(f"Model configuration: {self.config}")
         
         prefetches = []
+        
+        # Initialize metadata manager if needed
+        if self.metadata_manager is None:
+            self.metadata_manager = DPFMetadataManager(num_candidates=self.config['num_candidates'])
         
         # Process each memory access
         for i, (instr_id, cycle_count, load_addr, load_ip, llc_hit) in enumerate(data):
