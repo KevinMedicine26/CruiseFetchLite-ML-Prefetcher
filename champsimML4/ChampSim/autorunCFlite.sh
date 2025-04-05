@@ -2,13 +2,24 @@
 
 # ChampSim Automated Training and Testing Script
 # This script automates the process of training, generating prefetches, building, and testing in ChampSim
+#605.mcf-s0.trace.xz --no-base
+#docker-compose build
+
+#docker-compose up -d
+
+#docker-compose exec champsim bash
+
+#chmod +x autorunCFlite.sh
+
+#./autorunCFlite.sh
+
 
 # Trace file to use
-TRACE="./traces/619.lbm-s0.txt.xz"
-TRACE_TEST="./traces/619.lbm-s0.trace.xz"
-MODEL="./prefetch_files/model619lr003"
-PREFETCH_FILE="./prefetch_files/prefetches_619lr003.txt"
-WARMUP_INSTRUCTIONS=1
+TRACE="./traces/605.mcf-s0.txt.xz"
+TRACE_TEST="./traces/605.mcf-s0.trace.xz"
+MODEL="./prefetch_files/model605-WM20-PCembd128-CLUSembd48-Ncadi3-dpf2-sensitive"
+PREFETCH_FILE="./prefetch_files/prefetches_605-WM20-PCembd128-CLUSembd48-Ncadi3-dpf2-sensitive.txt"
+WARMUP_INSTRUCTIONS=20
 
 # Function to clear memory caches
 clear_memory() {
