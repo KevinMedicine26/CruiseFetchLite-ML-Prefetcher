@@ -844,12 +844,8 @@ class CruiseFetchPro(MLPrefetchModel):
         return self.stream_map[pc]
     
     def _monitor_matrices_usage(self):
-        """监控转换矩阵使用情况并在接近限制时提供警告"""
+        """监控转换矩阵使用情况"""
         current_size = len(self.offset_transition_matrices)
-        
-        # 仅在接近警告阈值时打印
-        if current_size >= self.matrices_warning_threshold:
-            print(f"NOTICE: Transition matrices usage high: {current_size}/{self.matrices_max_entries} ({(current_size/self.matrices_max_entries)*100:.1f}%)")
         
         # 仅在非常接近限制时执行极其宽松的LRU清理
         if current_size >= self.matrices_max_entries * 0.95:  # 95%的阈值
@@ -861,8 +857,6 @@ class CruiseFetchPro(MLPrefetchModel):
     def _apply_relaxed_matrices_replacement(self):
         """执行非常宽松的矩阵替换，仅在接近限制时执行"""
         if len(self.offset_transition_matrices) >= int(self.matrices_max_entries * 0.95):
-            print(f"Warning: Applying relaxed matrix replacement - removing oldest 5% of matrices")
-            
             # 获取所有矩阵按时间戳排序
             sorted_matrices = sorted(self.matrices_access_timestamps.items(), key=lambda x: x[1])
             
@@ -876,7 +870,7 @@ class CruiseFetchPro(MLPrefetchModel):
                     del self.offset_transition_matrices[page_id]
                     del self.matrices_access_timestamps[page_id]
             
-            print(f"Removed {num_to_remove} oldest matrices. Current count: {len(self.offset_transition_matrices)}")
+            
 
 
 class DPFMetadataManager:

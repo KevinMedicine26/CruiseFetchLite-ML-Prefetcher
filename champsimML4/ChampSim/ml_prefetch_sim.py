@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from model import Model
+from model import Model, create_model_with_config
 
 default_results_dir = './results'
 default_output_file = './stats.csv'
@@ -115,7 +115,7 @@ Note:
     not be available and the coverage statistic will only be approximate.
 '''.format(prog=sys.argv[0], default_results_dir=default_results_dir, default_output_file=default_output_file),
 
-'train': '''usage: {prog} train <load-trace> [--model <model-path>] [--generate <prefetch-file>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+'train': '''usage: {prog} train <load-trace> [--model <model-path>] [--generate <prefetch-file>] [--num-prefetch-warmup-instructions <num-warmup-instructions>] [--config <config-file>]
 
 Description:
     {prog} train <load-trace>
@@ -136,9 +136,12 @@ Options:
         This would also be the number of instructions that you train your models
         on. By specifying this, these first instructions do not get included in
         the metric computation.
+
+    --config <config-file>
+        Specifies the configuration file to use for the model.
 '''.format(prog=sys.argv[0], default_warmup_instrs=default_warmup_instrs),
 
-'generate': '''usage: {prog} generate <load-trace> <prefetch-file> [--model <model-path>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+'generate': '''usage: {prog} generate <load-trace> <prefetch-file> [--model <model-path>] [--num-prefetch-warmup-instructions <num-warmup-instructions>] [--config <config-file>]
 
 Description:
     {prog} generate <load-trace> <prefetch-file> --model <model-path>
@@ -151,6 +154,9 @@ Options:
         This would also be the number of instructions that you train your models
         on. By specifying this, these first instructions do not get included in
         the metric computation.
+
+    --config <config-file>
+        Specifies the configuration file to use for the model.
 '''.format(prog=sys.argv[0], default_warmup_instrs=default_warmup_instrs),
 }
 
@@ -407,12 +413,17 @@ def train_command():
     parser.add_argument('--generate', default=None)
     parser.add_argument('--model', default=None)
     parser.add_argument('--num-prefetch-warmup-instructions', type=int, default=default_warmup_instrs)
+    parser.add_argument('--config', default=None)
 
     args = parser.parse_args(sys.argv[2:])
 
     train_data, eval_data = read_load_trace_data(args.load_trace, args.num_prefetch_warmup_instructions)
 
-    model = Model()
+    if args.config is not None:
+        print(f"Using configuration from {args.config}")
+        model = create_model_with_config(args.config)
+    else:
+        model = Model()
     model.train(train_data)
 
     if args.model is not None:
@@ -433,10 +444,15 @@ def generate_command():
     parser.add_argument('prefetch_file', default=None)
     parser.add_argument('--model', default=None, required=True)
     parser.add_argument('--num-prefetch-warmup-instructions', type=int, default=default_warmup_instrs)
+    parser.add_argument('--config', default=None)
 
     args = parser.parse_args(sys.argv[2:])
 
-    model = Model()
+    if args.config is not None:
+        print(f"Using configuration from {args.config}")
+        model = create_model_with_config(args.config)
+    else:
+        model = Model()
     model.load(args.model)
 
     _, data = read_load_trace_data(args.load_trace, args.num_prefetch_warmup_instructions)
