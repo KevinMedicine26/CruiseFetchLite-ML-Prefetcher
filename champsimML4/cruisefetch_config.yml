@@ -1,0 +1,32 @@
+# CruiseFetchPro Configuration
+model:
+  # Neural network architecture
+  pc_embed_size: 32        # Reduced from 64 for faster inference
+  cluster_embed_size: 16   # Reduced from 25 for faster inference
+  offset_embed_size: 80    # cluster_embed_size * num_experts
+  num_experts: 5           # Reduced from 100 for faster inference
+  
+  # History and tracking parameters
+  history_length: 3        # Track 3 previous accesses
+  num_pcs: 1024            # Number of unique PCs to track
+  num_clusters: 512        # Number of behavioral clusters
+  offset_size: 64          # Page offsets (use 6 bits)
+  offset_bits: 6           # Number of bits for page offset
+  
+  # DPF parameters
+  num_candidates: 2        # Number of candidate pages to consider
+  dpf_history_length: 1    # Length of DPF vector history
+  dpf_positions_tracked: 3 # Number of positions to track in DPF
+  dpf_max_entries: 1024    # Maximum number of pages in DPF cache
+  
+  # Prefetcher parameters
+  max_prefetches_per_id: 2 # Maximum prefetches per instruction ID
+
+  # Boundary transition parameters
+  boundary_region_size: 4  # Consider 4 offsets at start/end as boundary region
+  boundary_confidence_threshold: 3  # Minimum occurrences to consider a boundary pattern
+
+  # Memory management parameters
+  max_matrices: 128000     # Maximum number of transition matrices (~2GB memory)
+  warning_threshold: 100000  # Threshold for warning about memory usage
+  cleanup_percentage: 0.05   # Percentage of matrices to remove during cleanup

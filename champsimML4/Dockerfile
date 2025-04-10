@@ -29,7 +29,9 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     tensorflow \
     numpy \
     matplotlib \
-    pandas
+    pandas \
+    pyyaml \
+    scikit-learn
 
 # Copy ChampSim repository
 COPY ChampSim /app/ChampSim

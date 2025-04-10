@@ -1,25 +1,34 @@
 #!/bin/bash
 
-# ChampSim Automated Training and Testing Script
-# This script automates the process of training, generating prefetches, building, and testing in ChampSim
-#605.mcf-s0.trace.xz --no-base
-#docker-compose build
+# CruiseFetchPro Automated Training and Testing Script
+# This script automates the process of training, generating prefetches, building, and testing for CruiseFetchPro
+# 
+# INSTRUCTIONS: Edit the variables below to customize your training and testing process
 
-#docker-compose up -d
+#------------------------------------
+# CONFIGURABLE PATHS AND PARAMETERS
+#------------------------------------
 
-#docker-compose exec champsim bash
+# Trace files
+TRACE_TRAIN="./traces/605.mcf-s0.txt.xz"     # Trace file for training
+TRACE_GENERATE="./traces/605.mcf-s0.txt.xz"  # Trace file for generating prefetches
+TRACE_TEST="./traces/605.mcf-s0.trace.xz"    # Trace file for testing
 
-#chmod +x autorunCFlite.sh
+# Model and prefetch files
+MODEL="./prefetch_files/model605-cruisefetchpro"  # Path to save/load model
+PREFETCH_FILE="./prefetch_files/prefetches_605-cruisefetchpro.txt"  # Path for generated prefetches
 
-#./autorunCFlite.sh
+# Configuration file
+CONFIG_FILE="../cruisefetch_config.yml"  # YAML configuration file path
 
+# Parameters
+WARMUP_TRAIN=20     # Number of warmup instructions for training
+WARMUP_GENERATE=20  # Number of warmup instructions for generating
+USE_NO_BASE=true    # Whether to use --no-base option in testing (true/false)
 
-# Trace file to use
-TRACE="./traces/605.mcf-s0.txt.xz"
-TRACE_TEST="./traces/605.mcf-s0.trace.xz"
-MODEL="./prefetch_files/model605-WM20-PCembd128-CLUSembd48-Ncadi3-dpf2-sensitive"
-PREFETCH_FILE="./prefetch_files/prefetches_605-WM20-PCembd128-CLUSembd48-Ncadi3-dpf2-sensitive.txt"
-WARMUP_INSTRUCTIONS=20
+#------------------------------------
+# UTILITY FUNCTIONS - DO NOT MODIFY
+#------------------------------------
 
 # Function to clear memory caches
 clear_memory() {
@@ -50,18 +59,41 @@ check_success() {
     fi
 }
 
-# Main execution
+# Prepare no-base option for testing
+NO_BASE_OPTION=""
+if [ "$USE_NO_BASE" = true ]; then
+    NO_BASE_OPTION="--no-base"
+    echo "Using --no-base option for testing"
+else
+    echo "Not using --no-base option for testing"
+fi
+
+# Check if config file exists
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "Warning: Configuration file $CONFIG_FILE not found. Will use default configuration."
+else
+    echo "Using configuration file: $CONFIG_FILE"
+    # Copy the configuration file to the model directory for reference
+    CONFIG_DIR=$(dirname "$MODEL")
+    mkdir -p "$CONFIG_DIR"
+    cp "$CONFIG_FILE" "${CONFIG_DIR}/$(basename ${CONFIG_FILE})"
+    echo "Configuration file copied to model directory for reference."
+fi
+
+#------------------------------------
+# MAIN EXECUTION
+#------------------------------------
 
 echo "===== STEP 1: TRAINING MODEL ====="
-echo "Running: python3 ml_prefetch_sim.py train $TRACE --model $MODEL --num-prefetch-warmup-instructions $WARMUP_INSTRUCTIONS"
-python3 ml_prefetch_sim.py train $TRACE --model $MODEL --num-prefetch-warmup-instructions $WARMUP_INSTRUCTIONS
+echo "Running: python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN"
+python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN
 check_success
 clear_memory
 countdown 10
 
 echo "===== STEP 2: GENERATING PREFETCHES ====="
-echo "Running: python3 ml_prefetch_sim.py generate $TRACE $PREFETCH_FILE --model $MODEL --num-prefetch-warmup-instructions $WARMUP_INSTRUCTIONS"
-python3 ml_prefetch_sim.py generate $TRACE $PREFETCH_FILE --model $MODEL --num-prefetch-warmup-instructions $WARMUP_INSTRUCTIONS
+echo "Running: python3 ml_prefetch_sim.py generate $TRACE_GENERATE $PREFETCH_FILE --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_GENERATE"
+python3 ml_prefetch_sim.py generate $TRACE_GENERATE $PREFETCH_FILE --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_GENERATE
 check_success
 clear_memory
 countdown 10
@@ -74,8 +106,16 @@ clear_memory
 countdown 10
 
 echo "===== STEP 4: TESTING ====="
-echo "Running: python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE --no-base"
-python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE --no-base
+echo "Running: python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE $NO_BASE_OPTION"
+python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE $NO_BASE_OPTION
+check_success
+
+echo "===== STEP 5: MODEL EVALUATION ====="
+echo "Running: python3 ml_prefetch_sim.py evaluate $TRACE_TEST --model $MODEL --config $CONFIG_FILE"
+python3 ml_prefetch_sim.py evaluate $TRACE_TEST --model $MODEL --config $CONFIG_FILE
 check_success
 
 echo "===== ALL STEPS COMPLETED SUCCESSFULLY ====="
+echo "Training and evaluation results for CruiseFetchPro with configuration file $CONFIG_FILE"
+echo "Model saved to: $MODEL"
+echo "Prefetches generated to: $PREFETCH_FILE"
