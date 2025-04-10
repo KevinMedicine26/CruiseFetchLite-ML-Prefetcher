@@ -240,11 +240,17 @@ class CruiseFetchPro(MLPrefetchModel):
         """Create the TensorFlow model from configuration"""
         try:
             # Define model using Functional API
-            # Inputs
+            # Inputs with properly defined shapes
             cluster_history_input = tf.keras.layers.Input(shape=(self.config['history_length'],), name='cluster_history', dtype=tf.int32)
             offset_history_input = tf.keras.layers.Input(shape=(self.config['history_length'],), name='offset_history', dtype=tf.int32)
             pc_input = tf.keras.layers.Input(shape=(1,), name='pc', dtype=tf.int32)
-            dpf_input = tf.keras.layers.Input(shape=(self.config['dpf_history_length'], self.config['num_candidates']), name='dpf', dtype=tf.float32)
+            
+            # Fix dpf_input shape definition to match prepare_model_inputs
+            dpf_input = tf.keras.layers.Input(
+                shape=(1, self.config['num_candidates']),  # Updated shape to match prepare_model_inputs
+                name='dpf', 
+                dtype=tf.float32
+            )
             
             # Embedding layers
             cluster_embedding = tf.keras.layers.Embedding(
@@ -323,13 +329,18 @@ class CruiseFetchPro(MLPrefetchModel):
             # Flatten cluster embedding
             cluster_flat = tf.reshape(cluster_embedding_with_pos, [batch_size, self.config['history_length'] * self.config['cluster_embed_size']])
             
-            # Flatten DPF vectors
-            dpf_flat = tf.reshape(dpf_input, [batch_size, self.config['dpf_history_length'] * self.config['num_candidates']])
+            # Flatten DPF vectors with corrected shape
+            dpf_flat = tf.reshape(dpf_input, [batch_size, self.config['num_candidates']])
             
             # Concatenate all features
             combined = tf.keras.layers.Concatenate(name='combined_features')(
                 [pc_embedding_flat, cluster_flat, context_offset, dpf_flat]
             )
+            
+            # Ensure combined has a known shape before Dense layer
+            combined_shape = combined.get_shape().as_list()
+            if None in combined_shape[1:]:
+                raise ValueError(f"Combined tensor shape has unknown dimensions: {combined_shape}")
             
             # Candidate and offset prediction heads
             candidate_logits = tf.keras.layers.Dense(
@@ -447,6 +458,10 @@ class CruiseFetchPro(MLPrefetchModel):
     
     def get_cluster_id(self, page_id):
         """Get cluster ID for a page ID based on behavioral similarity"""
+        # Special case for page_id 0 (sentinel value)
+        if page_id == 0:
+            return 0  # Use cluster_id 0 for sentinel page_id 0
+        
         if page_id in self.clustering_info:
             return self.clustering_info[page_id]['cluster_id']
         
@@ -472,7 +487,13 @@ class CruiseFetchPro(MLPrefetchModel):
             # Fall back to hash-based assignment for new pages
             cluster_id = hash(page_id) % self.config['num_clusters']
         
-        self.clustering_info[page_id]['cluster_id'] = cluster_id
+        # Initialize clustering info for this page
+        self.clustering_info[page_id] = {
+            'offsets': np.zeros(self.config['offset_size'], dtype=np.int32),
+            'total_accesses': 0,
+            'cluster_id': cluster_id
+        }
+        
         return cluster_id
     
     def cluster_pages(self):
@@ -518,7 +539,16 @@ class CruiseFetchPro(MLPrefetchModel):
         
         # Assign clusters to pages
         for i, page in enumerate(pages):
-            self.clustering_info[page]['cluster_id'] = int(clusters[i])
+            # Check if page exists in clustering_info before assignment
+            if page in self.clustering_info:
+                self.clustering_info[page]['cluster_id'] = int(clusters[i])
+            else:
+                # Initialize clustering info for this page if it doesn't exist
+                self.clustering_info[page] = {
+                    'offsets': np.zeros(self.config['offset_size'], dtype=np.int32),
+                    'total_accesses': 1,
+                    'cluster_id': int(clusters[i])
+                }
             
         print(f"Clustered {len(pages)} pages into {n_clusters} behavioral clusters")
     
@@ -533,12 +563,24 @@ class CruiseFetchPro(MLPrefetchModel):
         else:
             dpf_vector = np.zeros(self.config['num_candidates'], dtype=np.float32)
         
+        # Ensure dpf_vector has the correct shape
+        dpf_vector = np.array(dpf_vector, dtype=np.float32)
+        if len(dpf_vector) > self.config['num_candidates']:
+            # Truncate if too long
+            dpf_vector = dpf_vector[:self.config['num_candidates']]
+        elif len(dpf_vector) < self.config['num_candidates']:
+            # Pad with zeros if too short
+            dpf_vector = np.pad(dpf_vector, (0, self.config['num_candidates'] - len(dpf_vector)), 'constant')
+        
+        # Reshape for model input expectations - ensure consistent shape
+        dpf_reshaped = np.reshape(dpf_vector, (1, self.config['num_candidates']))
+        
         # Format inputs for the model
         inputs = [
             np.array([cluster_history], dtype=np.int32),
             np.array([self.offset_history[stream_id]], dtype=np.int32),
             np.array([[self.last_pc[stream_id] % self.config['num_pcs']]], dtype=np.int32),
-            np.array([[dpf_vector]], dtype=np.float32)
+            np.array([dpf_reshaped], dtype=np.float32)  # Changed to ensure consistent shape
         ]
         
         return inputs
@@ -669,7 +711,10 @@ class CruiseFetchPro(MLPrefetchModel):
         print(f"Training model on {len(data)} records...")
         
         # Process trace data to gather training examples
-        examples = []
+        cluster_history_examples = []
+        offset_history_examples = []
+        pc_examples = []
+        dpf_examples = []
         labels_candidate = []
         labels_offset = []
         
@@ -686,21 +731,24 @@ class CruiseFetchPro(MLPrefetchModel):
         prev_offset = None
         
         for instr_id, cycle_count, load_addr, load_ip, llc_hit in data:
-            page_id, offset = load_addr >> 6, load_addr & 0x3F
+            cache_line_addr = load_addr >> 6  # 64-byte cache line
+            page_id = cache_line_addr >> self.config['offset_bits']
+            offset = cache_line_addr & ((1 << self.config['offset_bits']) - 1)
             
             # Update transition matrices
             if prev_page is not None:
                 self._monitor_matrices_usage()
                 
-                if page_id not in self.offset_transition_matrices:
-                    self.offset_transition_matrices[page_id] = np.zeros(
+                if prev_page not in self.offset_transition_matrices:
+                    # Create new matrix
+                    self.offset_transition_matrices[prev_page] = np.zeros(
                         (self.config['offset_size'], self.config['offset_size']), 
                         dtype=np.int32
                     )
                     
                 self.matrices_current_timestamp += 1
-                self.matrices_access_timestamps[page_id] = self.matrices_current_timestamp
-                self.offset_transition_matrices[page_id][prev_offset, offset] += 1
+                self.matrices_access_timestamps[prev_page] = self.matrices_current_timestamp
+                self.offset_transition_matrices[prev_page][prev_offset, offset] += 1
                 
                 # Update DPF metadata
                 self.metadata_manager.update_page_access(prev_page, page_id, prev_offset, offset)
@@ -723,61 +771,68 @@ class CruiseFetchPro(MLPrefetchModel):
             self.process_trace_entry(instr_id, cycle_count, load_addr, load_ip, llc_hit)
             
             # Extract features and labels for training
-            page_id, offset = load_addr >> 6, load_addr & 0x3F
+            cache_line_addr = load_addr >> 6  # 64-byte cache line
+            page_id = cache_line_addr >> self.config['offset_bits']
+            offset = cache_line_addr & ((1 << self.config['offset_bits']) - 1)
             stream_id = self.get_stream_id(load_ip)
             
             if prev_page is not None and self.page_history[stream_id][-1] != 0:
-                # Get input features
+                # Get input features - using fixed method
                 inputs = self.prepare_model_inputs(stream_id)
+                
+                # Safely extract components
+                cluster_history_examples.append(inputs[0][0])
+                offset_history_examples.append(inputs[1][0])
+                pc_examples.append(inputs[2][0][0])
+                dpf_examples.append(inputs[3][0])
                 
                 # Get target labels
                 target_candidates = self.metadata_manager.get_candidate_pages(prev_page)
-                candidate_indices = np.zeros(self.config['num_candidates'] + 1)  # +1 for "no prefetch"
                 
                 # Find current page in candidates
-                found = False
+                found_idx = -1  # -1 represents "no prefetch"
                 for i, (candidate_page, _) in enumerate(target_candidates):
                     if candidate_page == page_id:
-                        candidate_indices[i] = 1.0
-                        found = True
+                        found_idx = i
                         break
-                        
-                # If not found, mark as "no prefetch"
-                if not found:
-                    candidate_indices[-1] = 1.0
                 
-                # Mark target offset
-                offset_indices = np.zeros(self.config['offset_size'])
-                offset_indices[offset] = 1.0
-                
-                # Add to training data
-                examples.append(inputs)
-                labels_candidate.append(candidate_indices)
-                labels_offset.append(offset_indices)
+                # Add label (index of correct candidate)
+                labels_candidate.append(found_idx if found_idx != -1 else self.config['num_candidates'])
+                labels_offset.append(offset)
             
             prev_page = page_id
             prev_offset = offset
         
         # Create and train TensorFlow model if we have enough examples
-        if len(examples) > 100:
+        if len(cluster_history_examples) > 100:
             # Create model
-            self.create_tf_model()
+            self.model = self.create_tf_model()
             
-            # Convert to numpy arrays
-            X = np.array(examples)
-            y_candidate = np.array(labels_candidate)
-            y_offset = np.array(labels_offset)
+            if self.model is None:
+                print("Failed to create model. Skipping training.")
+                return self
+            
+            # Convert to numpy arrays - now with consistent shapes
+            cluster_history_array = np.array(cluster_history_examples, dtype=np.int32)
+            offset_history_array = np.array(offset_history_examples, dtype=np.int32)
+            pc_array = np.array(pc_examples, dtype=np.int32).reshape(-1, 1)
+            dpf_array = np.array(dpf_examples, dtype=np.float32)
+            
+            labels_candidate_array = np.array(labels_candidate, dtype=np.int32)
+            labels_offset_array = np.array(labels_offset, dtype=np.int32)
             
             # Train model
-            self.model.fit(
-                X, 
-                [y_candidate, y_offset],
-                epochs=5,
-                batch_size=64,
-                verbose=1
-            )
-            
-            print("Model trained successfully.")
+            try:
+                self.model.fit(
+                    [cluster_history_array, offset_history_array, pc_array, dpf_array],
+                    [labels_candidate_array, labels_offset_array],
+                    epochs=5,
+                    batch_size=64,
+                    verbose=1
+                )
+                print("Model trained successfully.")
+            except Exception as e:
+                print(f"Error during training: {e}")
         else:
             print("Not enough training examples to train the model.")
             
@@ -844,32 +899,31 @@ class CruiseFetchPro(MLPrefetchModel):
         return self.stream_map[pc]
     
     def _monitor_matrices_usage(self):
-        """监控转换矩阵使用情况"""
+        """Monitor matrices usage"""
         current_size = len(self.offset_transition_matrices)
         
-        # 仅在非常接近限制时执行极其宽松的LRU清理
-        if current_size >= self.matrices_max_entries * 0.95:  # 95%的阈值
+        # Only perform relaxed LRU cleanup when very close to limit
+        if current_size >= self.matrices_max_entries * 0.95:  # 95% threshold
             self._apply_relaxed_matrices_replacement()
             return True
         
         return False
 
     def _apply_relaxed_matrices_replacement(self):
-        """执行非常宽松的矩阵替换，仅在接近限制时执行"""
+        """Execute relaxed matrix replacement, only when close to limit"""
         if len(self.offset_transition_matrices) >= int(self.matrices_max_entries * 0.95):
-            # 获取所有矩阵按时间戳排序
+            # Get all matrices sorted by timestamp
             sorted_matrices = sorted(self.matrices_access_timestamps.items(), key=lambda x: x[1])
             
-            # 计算要删除的数量 (5% of total)
+            # Calculate number of matrices to remove (5% of total)
             num_to_remove = int(len(sorted_matrices) * self.config.get('cleanup_percentage', 0.05))
             
-            # 删除最旧的5%矩阵
+            # Delete the least recently used matrices
             for i in range(num_to_remove):
                 page_id = sorted_matrices[i][0]
                 if page_id in self.offset_transition_matrices:
                     del self.offset_transition_matrices[page_id]
                     del self.matrices_access_timestamps[page_id]
-            
             
 
 
@@ -994,8 +1048,11 @@ class DPFMetadataManager:
     def get_dpf_vector(self, trigger_page):
         """Get the DPF vector for a trigger page with position-based weighting"""
         if trigger_page not in self.page_metadata:
-            # Default to sequential prediction
-            return np.array([0.7, 0.3] + [0.0] * (self.num_candidates - 2), dtype=np.float32)
+            # Default to sequential prediction with exact size
+            default_vec = np.zeros(self.num_candidates, dtype=np.float32)
+            default_vec[0] = 0.7
+            default_vec[1] = 0.3
+            return default_vec
         
         # Position weights (higher weight for closer positions)
         position_weights = self.position_weights
@@ -1022,18 +1079,22 @@ class DPFMetadataManager:
         
         # If no candidates found, fallback to sequential
         if not candidates_scores:
-            return np.array([0.7, 0.3] + [0.0] * (self.num_candidates - 2), dtype=np.float32)
+            default_vec = np.zeros(self.num_candidates, dtype=np.float32)
+            default_vec[0] = 0.7
+            default_vec[1] = 0.3
+            return default_vec
         
         # Sort by score and create vector
         sorted_candidates = sorted(candidates_scores.items(), key=lambda x: x[1], reverse=True)
         
-        # Create DPF vector
+        # Create DPF vector with exact size
         dpf_vector = np.zeros(self.num_candidates, dtype=np.float32)
         
         # Fill with top candidates
         for i, (_, score) in enumerate(sorted_candidates[:self.num_candidates]):
-            dpf_vector[i] = score
-            
+            if i < self.num_candidates:  # Safety check
+                dpf_vector[i] = score
+        
         # Ensure the vector sums to 1.0
         if np.sum(dpf_vector) > 0:
             dpf_vector = dpf_vector / np.sum(dpf_vector)

@@ -27,8 +27,10 @@ champsimML4/
 docker前三步骤（environment）
 docker-compose build
 ## Running the Docker Container
+
 To start the Docker container, run:
 docker-compose up -d
+
 To enter the container in interactive mode:
 docker-compose exec champsim bash
 
