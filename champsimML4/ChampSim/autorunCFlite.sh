@@ -15,16 +15,16 @@ TRACE_GENERATE="./traces/605.mcf-s1.txt.xz"  # Trace file for generating prefetc
 TRACE_TEST="./traces/605.mcf-s1.trace.xz"    # Trace file for testing
 
 # Model and prefetch files
-MODEL="./prefetch_files/model605-cruisefetchpro-base-605s0"  # Path to save/load model
-PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro.txt"  # Path for generated prefetches
+MODEL="./prefetch_files/model605-cruisefetchpro-sen-cluster-605s0"  # Path to save/load model
+PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro-sen-cluster.txt"  # Path for generated prefetches
 
 # Configuration file
-CONFIG_FILE="../cruisefetch_config.yml"  # YAML configuration file path
+CONFIG_FILE="./model_config/cruisefetch_config_sen_cluster.yml"  # YAML configuration file path
 
 # Parameters
 WARMUP_TRAIN=20     # Number of warmup instructions for training
 WARMUP_GENERATE=20  # Number of warmup instructions for generating
-USE_NO_BASE=false    # Whether to use --no-base option in testing (true/false)
+USE_NO_BASE=true    # Whether to use --no-base option in testing (true/false)
 
 #------------------------------------
 # UTILITY FUNCTIONS - DO NOT MODIFY
@@ -59,6 +59,30 @@ check_success() {
     fi
 }
 
+# Function to create a symbolic link from custom config to default name expected by model.py
+create_config_symlink() {
+    # Path to default config file expected by model.py
+    DEFAULT_CONFIG_PATH="../cruisefetch_config.yml"
+    
+    # Remove any existing symlink or file
+    if [ -e "$DEFAULT_CONFIG_PATH" ] || [ -L "$DEFAULT_CONFIG_PATH" ]; then
+        echo "Removing existing default config file or symlink"
+        rm "$DEFAULT_CONFIG_PATH"
+    fi
+    
+    # Create a symbolic link from your custom config to the default location
+    echo "Creating symbolic link from $CONFIG_FILE to $DEFAULT_CONFIG_PATH"
+    ln -sf "$(realpath $CONFIG_FILE)" "$DEFAULT_CONFIG_PATH"
+    
+    # Verify the link was created successfully
+    if [ -L "$DEFAULT_CONFIG_PATH" ]; then
+        echo "Symbolic link created successfully"
+    else
+        echo "Failed to create symbolic link"
+        exit 1
+    fi
+}
+
 # Prepare no-base option for testing
 NO_BASE_OPTION=""
 if [ "$USE_NO_BASE" = true ]; then
@@ -78,6 +102,9 @@ else
     mkdir -p "$CONFIG_DIR"
     cp "$CONFIG_FILE" "${CONFIG_DIR}/$(basename ${CONFIG_FILE})"
     echo "Configuration file copied to model directory for reference."
+    
+    # Create symbolic link to default config name for model.py
+    create_config_symlink
 fi
 
 #------------------------------------
@@ -110,10 +137,10 @@ echo "Running: python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_F
 python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE $NO_BASE_OPTION
 check_success
 
-echo "===== STEP 5: MODEL EVALUATION ====="
-echo "Running: python3 ml_prefetch_sim.py evaluate $TRACE_TEST --model $MODEL --config $CONFIG_FILE"
-python3 ml_prefetch_sim.py evaluate $TRACE_TEST --model $MODEL --config $CONFIG_FILE
-check_success
+#echo "===== STEP 5: MODEL EVALUATION ====="
+#echo "Running: python3 ml_prefetch_sim.py eval --results-dir ./results"
+#python3 ml_prefetch_sim.py eval --results-dir ./results
+#check_success
 
 echo "===== ALL STEPS COMPLETED SUCCESSFULLY ====="
 echo "Training and evaluation results for CruiseFetchPro with configuration file $CONFIG_FILE"

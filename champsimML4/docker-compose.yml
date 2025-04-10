@@ -10,7 +10,8 @@ services:
       - ./ChampSim/prefetch_files:/app/ChampSim/prefetch_files
       - ./ChampSim/model.py:/app/ChampSim/model.py
       - ./ChampSim/autorunCFlite.sh:/app/ChampSim/autorunCFlite.sh
-      - ./cruisefetch_config.yml:/app/cruisefetch_config.yml
+      - ./ChampSim/model_config:/app/ChampSim/model_config
+      - ./ChampSim/ml_prefetch_sim.py:/app/ChampSim/ml_prefetch_sim.py
     tty: true
     stdin_open: true
     command: tail -f /dev/null

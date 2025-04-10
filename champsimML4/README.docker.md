@@ -41,7 +41,7 @@ chmod +x autorunCFlite.sh
 
 
 在容器内运行脚本：
-./autorunCFlite.sh
+  ./autorunCFlite.sh
 
 
 1. Open a terminal or command prompt

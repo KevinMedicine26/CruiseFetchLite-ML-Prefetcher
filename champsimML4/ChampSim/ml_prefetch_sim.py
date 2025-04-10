@@ -420,8 +420,17 @@ def train_command():
     train_data, eval_data = read_load_trace_data(args.load_trace, args.num_prefetch_warmup_instructions)
 
     if args.config is not None:
-        print(f"Using configuration from {args.config}")
-        model = create_model_with_config(args.config)
+        # Add more robust config file path handling
+        config_path = os.path.abspath(args.config)
+        print(f"Checking configuration file at: {config_path}")
+        
+        if os.path.exists(config_path):
+            print(f"Configuration file found at: {config_path}")
+            model = create_model_with_config(config_path)
+        else:
+            print(f"ERROR: Configuration file not found at: {config_path}")
+            print("Please check if the path is correct and the file exists")
+            exit(1)
     else:
         model = Model()
     model.train(train_data)

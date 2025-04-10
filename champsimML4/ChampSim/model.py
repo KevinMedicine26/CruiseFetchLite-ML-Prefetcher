@@ -74,11 +74,13 @@ class CruiseFetchPro(MLPrefetchModel):
     
     def __init__(self, config_path=None):
         super().__init__()
-        # Initialize configuration with default or custom values
+        # Initialize configuration with custom values
         if config_path:
             self.config = self.load_config(config_path)
         else:
-            self.config = self.get_default_config()
+            print("Error: No configuration file provided")
+            print("Please provide a valid configuration file path")
+            exit(1)
         
         # Initialize TensorFlow model
         self.model = None
@@ -110,41 +112,40 @@ class CruiseFetchPro(MLPrefetchModel):
         self.matrices_access_timestamps = {}  # 跟踪访问时间
         self.matrices_current_timestamp = 0  # 时间戳计数器
     
+    # Load configuration from YAML file
     def load_config(self, config_path):
-        """Load configuration from YAML file"""
+        """Load configuration from a YAML file"""
         try:
-            with open(config_path, 'r') as f:
-                yaml_config = yaml.safe_load(f)
-                return yaml_config.get('model', self.get_default_config())
+            print(f"Attempting to load configuration from: {config_path}")
+            
+            # Convert to absolute path if not already
+            if not os.path.isabs(config_path):
+                config_path = os.path.abspath(config_path)
+                print(f"Using absolute path: {config_path}")
+                
+            if not os.path.exists(config_path):
+                print(f"No configuration file found at: {config_path}")
+                print(f"Current working directory: {os.getcwd()}")
+                print("Using default configuration")
+                return {}  # Return empty config if file not found
+                
+            print(f"Found configuration file at: {config_path}")
+            with open(config_path, 'r') as config_file:
+                config = yaml.safe_load(config_file)
+                
+            if not config or not isinstance(config, dict) or 'model' not in config:
+                print(f"Invalid configuration format in {config_path}")
+                return {}
+                
+            print(f"Successfully loaded configuration from {config_path}")
+            model_config = config.get('model', {})
+            print("Configuration parameters:")
+            for key, value in model_config.items():
+                print(f"  - {key}: {value}")
+            return model_config
         except Exception as e:
-            print(f"Error loading configuration: {e}")
-            print("Falling back to default configuration")
-            return self.get_default_config()
-    
-    def get_default_config(self):
-        """Return default configuration for the model"""
-        config = {
-            # Model architecture parameters
-            'pc_embed_size': 32,        # Reduced from 64 for faster inference [my default is 32]
-            'cluster_embed_size': 16,   # Reduced from 25 for faster inference [my default is 16]
-            'offset_embed_size': 80,    # cluster_embed_size * num_experts [my default is 80]
-            'num_experts': 5,           # Reduced from 100 for faster inference [my default is 5]
-            'history_length': 3,        # Track 3 previous accesses  [my default is 3]
-            'num_pcs': 1024,            # Number of unique PCs to track [my default is 1024]
-            'num_clusters': 512,        # Number of behavioral clusters [my default is 512]
-            'offset_size': 64,          # Page offsets (use 6 bits) [my default is 64]
-            'num_candidates': 2,        # Number of candidate pages to consider [my default is 2]
-            'dpf_history_length': 1,    # Length of DPF vector history [my default is 1]
-            'offset_bits': 6,           # Number of bits for page offset [my default is 6]
-            
-            # Enhanced DPF parameters
-            'dpf_positions_tracked': 3, # Number of positions to track in DPF [my default is 3]
-            'dpf_max_entries': 1024,    # Maximum number of pages in DPF cache [my default is 1024]
-            
-            # Prefetcher parameters
-            'max_prefetches_per_id': 2  # Maximum prefetches per instruction ID
-        }
-        return config
+            print(f"Error loading configuration: {str(e)}")
+            return {}
     
     def load(self, path):
         """Load model from the given path"""
@@ -924,7 +925,6 @@ class CruiseFetchPro(MLPrefetchModel):
                 if page_id in self.offset_transition_matrices:
                     del self.offset_transition_matrices[page_id]
                     del self.matrices_access_timestamps[page_id]
-            
 
 
 class DPFMetadataManager:
