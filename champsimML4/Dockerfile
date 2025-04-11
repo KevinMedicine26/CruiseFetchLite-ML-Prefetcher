@@ -55,6 +55,7 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
 # Copy ChampSim repository
 COPY ChampSim /app/ChampSim
 
+
 # Fix line endings and make scripts executable
 RUN find /app/ChampSim -name "*.sh" -exec dos2unix {} \; && \
     chmod +x /app/ChampSim/*.sh

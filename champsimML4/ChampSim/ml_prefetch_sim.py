@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 
-from model import Model, create_model_with_config
+from CF_model_script import Model, create_model_with_config
 
 default_results_dir = './results'
 default_output_file = './stats.csv'
@@ -53,7 +53,7 @@ Notes:
 '''.format(prog=sys.argv[0]),
 
 'run': '''usage: {prog} run <execution-trace> [--prefetch <prefetch-file>] [--no-base] [--results-dir <results-dir>]
-                            [--num-instructions <num-instructions>] [--num-prefetch-warmup-instructions <num-warmup-instructions>]
+                            [--num-instructions <num-instructions>] [--num-prefetch-warmup-instructions <num-warmup-instructions>] [--seed-file <seed-file>]
 
 Description:
     {prog} run <execution-trace>
