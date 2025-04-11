@@ -23,27 +23,6 @@ champsimML4/
 
 ## Building the Docker Container
 
-运行指南
-docker前三步骤（environment）
-docker-compose build
-## Running the Docker Container
-
-To start the Docker container, run:
-docker-compose up -d
-
-To enter the container in interactive mode:
-docker-compose exec champsim bash
-
-进入容器并使脚本可执行：
-
-
-chmod +x autorunCFlite.sh
-
-
-在容器内运行脚本：
-  ./autorunCFlite.sh
-
-
 1. Open a terminal or command prompt
 2. Navigate to the project directory where `Dockerfile` is located
 3. Run the following command to build the Docker image:
