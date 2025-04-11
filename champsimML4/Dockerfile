@@ -20,6 +20,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
     wget \
     dos2unix \
+    gnupg2 \
+    software-properties-common \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install TensorRT
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libnvinfer8=8.5.3-1+cuda11.8 \
+    libnvinfer-plugin8=8.5.3-1+cuda11.8 \
+    libnvonnxparsers8=8.5.3-1+cuda11.8 \
+    libnvparsers8=8.5.3-1+cuda11.8 \
+    libnvinfer-dev=8.5.3-1+cuda11.8 \
+    libnvinfer-plugin-dev=8.5.3-1+cuda11.8 \
+    libnvonnxparsers-dev=8.5.3-1+cuda11.8 \
+    libnvparsers-dev=8.5.3-1+cuda11.8 \
+    python3-libnvinfer=8.5.3-1+cuda11.8 \
+    python3-libnvinfer-dev=8.5.3-1+cuda11.8 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,7 +47,10 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     tensorflow \
     numpy \
     matplotlib \
-    pandas
+    pandas \
+    pyyaml \
+    scikit-learn \
+    tensorrt==8.5.3.1
 
 # Copy ChampSim repository
 COPY ChampSim /app/ChampSim
@@ -47,7 +68,7 @@ RUN mkdir -p /app/ChampSim/traces
 
 # Set environment variables for CUDA (fixed legacy format)
 ENV PATH=/usr/local/cuda/bin:${PATH}
-ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
 # Set default command
 CMD ["bash"]
