@@ -179,12 +179,8 @@ class CruiseFetchPro(MLPrefetchModel):
             try:
                 with lzma.open(f"{path}_page_metadata.xz", "rb") as f:
                     page_metadata = pickle.load(f)
-                    # Create metadata manager with enhanced parameters
-                    self.metadata_manager = DPFMetadataManager(
-                        num_candidates=self.config.get('num_candidates', 2),
-                        positions_tracked=self.config.get('dpf_positions_tracked', 3),
-                        max_entries=self.config.get('dpf_max_entries', 1024)
-                    )
+                    # 使用配置驱动设计 - 通过config对象初始化所有管理器
+                    self.metadata_manager = DPFMetadataManager(self.config)
                     self.metadata_manager.page_metadata = page_metadata
                     print(f"Loaded page metadata with {len(page_metadata)} pages")
             except Exception as e:
@@ -237,6 +233,7 @@ class CruiseFetchPro(MLPrefetchModel):
             print(f"Error saving model: {e}")
             return False
     
+
     def create_tf_model(self):
         """Create the TensorFlow model from configuration"""
         try:
@@ -246,9 +243,9 @@ class CruiseFetchPro(MLPrefetchModel):
             offset_history_input = tf.keras.layers.Input(shape=(self.config['history_length'],), name='offset_history', dtype=tf.int32)
             pc_input = tf.keras.layers.Input(shape=(1,), name='pc', dtype=tf.int32)
             
-            # Fix dpf_input shape definition to match prepare_model_inputs
+            # dpf input
             dpf_input = tf.keras.layers.Input(
-                shape=(1, self.config['num_candidates']),  # Updated shape to match prepare_model_inputs
+                shape=(self.config['num_candidates'],),  
                 name='dpf', 
                 dtype=tf.float32
             )
@@ -330,12 +327,9 @@ class CruiseFetchPro(MLPrefetchModel):
             # Flatten cluster embedding
             cluster_flat = tf.reshape(cluster_embedding_with_pos, [batch_size, self.config['history_length'] * self.config['cluster_embed_size']])
             
-            # Flatten DPF vectors with corrected shape
-            dpf_flat = tf.reshape(dpf_input, [batch_size, self.config['num_candidates']])
-            
             # Concatenate all features
             combined = tf.keras.layers.Concatenate(name='combined_features')(
-                [pc_embedding_flat, cluster_flat, context_offset, dpf_flat]
+                [pc_embedding_flat, cluster_flat, context_offset, dpf_input]
             )
             
             # Ensure combined has a known shape before Dense layer

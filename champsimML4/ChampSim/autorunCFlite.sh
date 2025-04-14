@@ -15,8 +15,8 @@ TRACE_GENERATE="./traces/605.mcf-s1.txt.xz"  # Trace file for generating prefetc
 TRACE_TEST="./traces/605.mcf-s1.trace.xz"    # Trace file for testing
 
 # Model and prefetch files
-MODEL="./prefetch_files/model605-cruisefetchpro-sen-cluster-605s0"  # Path to save/load model
-PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro-sen-cluster.txt"  # Path for generated prefetches
+MODEL="./prefetch_files/model605-cruisefetchpro-sen-cluster-605s0-2"  # Path to save/load model
+PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro-sen-cluster-2.txt"  # Path for generated prefetches
 
 # Configuration file
 CONFIG_FILE="./model_config/cruisefetch_config_sen_cluster.yml"  # YAML configuration file path
@@ -43,7 +43,7 @@ countdown() {
     local seconds=$1
     echo "Waiting $seconds seconds before next step..."
     for (( i=$seconds; i>0; i-- )); do
-        echo -ne "$i...\r"
+        echo -ne "$i...\n"
         sleep 1
     done
     echo -e "\nContinuing to next step."
@@ -137,10 +137,6 @@ echo "Running: python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_F
 python3 ml_prefetch_sim.py run $TRACE_TEST --prefetch $PREFETCH_FILE $NO_BASE_OPTION
 check_success
 
-#echo "===== STEP 5: MODEL EVALUATION ====="
-#echo "Running: python3 ml_prefetch_sim.py eval --results-dir ./results"
-#python3 ml_prefetch_sim.py eval --results-dir ./results
-#check_success
 
 echo "===== ALL STEPS COMPLETED SUCCESSFULLY ====="
 echo "Training and evaluation results for CruiseFetchPro with configuration file $CONFIG_FILE"

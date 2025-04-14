@@ -1,25 +1,21 @@
-# ChampSim Docker Instructions
+Create a new file with the correct line endings:
+CopyInsert
+cat autorunCFlite.sh | tr -d '\r' > autorunCFlite_fixed.sh
+Make the new file executable:
+CopyInsert
+chmod +x autorunCFlite_fixed.sh
+Run the fixed script:
+CopyInsert
+./autorunCFlite_fixed.sh
+This workaround avoids direct in-place modification of the original file, which seems to be causing issues due to how the filesystem is mounted or locked.
 
-This document explains how to build and run the ChampSim project with the CruiseFetchLITE model using Docker.
+If you want to edit the original file properly, you might need to:
 
-## Prerequisites
-
-- [Docker](https://www.docker.com/products/docker-desktop/)
-- [Docker Compose](https://docs.docker.com/compose/install/) (included in Docker Desktop)
-
-## Directory Structure
-
-The Docker configuration maintains the following directory structure:
-
-```
-champsimML4/
-├── ChampSim/            # ChampSim simulation framework
-│   ├── model.py         # Your CruiseFetchLITE model implementation
-│   ├── ml_prefetch_sim.py # ML prefetcher simulation script
-│   └── ...              # Other ChampSim files
-├── Dockerfile           # Docker configuration
-└── docker-compose.yml   # Docker Compose configuration
-```
+Edit it on your Windows host system using a text editor that supports Unix line endings (like VS Code, with the EOL set to LF)
+Or temporarily copy it outside the mounted volume in the container, fix it, and copy it back
+Feedback submitted
+Generating..
+ 
 
 ## Building the Docker Container
 
