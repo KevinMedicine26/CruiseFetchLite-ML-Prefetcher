@@ -1,41 +1,16 @@
-Create a new file with the correct line endings:
-CopyInsert
+debug: 
 cat autorunCFlite.sh | tr -d '\r' > autorunCFlite_fixed.sh
-Make the new file executable:
-CopyInsert
-chmod +x autorunCFlite_fixed.sh
-Run the fixed script:
-CopyInsert
-./autorunCFlite_fixed.sh
-This workaround avoids direct in-place modification of the original file, which seems to be causing issues due to how the filesystem is mounted or locked.
-
-If you want to edit the original file properly, you might need to:
-
-Edit it on your Windows host system using a text editor that supports Unix line endings (like VS Code, with the EOL set to LF)
-Or temporarily copy it outside the mounted volume in the container, fix it, and copy it back
-Feedback submitted
-Generating..
- 
-
 ## Building the Docker Container
-
-运行指南
-docker前三步骤（environment）
 docker-compose build
 ## Running the Docker Container
-
-To start the Docker container, run:
+To start:
 docker-compose up -d
 
-To enter the container in interactive mode:
+To enter 
 docker-compose exec champsim bash
 
 进入容器并使脚本可执行：
-
-
 chmod +x autorunCFlite.sh
-
-
 在容器内运行脚本：
   ./autorunCFlite.sh
 
