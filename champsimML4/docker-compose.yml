@@ -12,6 +12,7 @@ services:
       - ./ChampSim/autorunCFlite.sh:/app/ChampSim/autorunCFlite.sh
       - ./ChampSim/model_config:/app/ChampSim/model_config
       - ./ChampSim/ml_prefetch_sim.py:/app/ChampSim/ml_prefetch_sim.py
+      - ./ChampSim/generate_module.py:/app/ChampSim/generate_module.py
     tty: true
     stdin_open: true
     command: tail -f /dev/null

@@ -1,12 +1,33 @@
 """
 CruiseFetchPro预取器的优化预取生成模块
 包含generate方法及其所有相关的辅助函数
+增强版：启用TensorFlow内部并行，充分利用多核CPU
 """
 
 import numpy as np
 import tensorflow as tf
 import random
 import time
+import os
+import psutil  # 用于监控CPU使用率（如果可用）
+
+# ============= 设置TensorFlow并行配置 =============
+# 获取CPU核心数
+CPU_CORES = os.cpu_count() or 8  # 如果无法检测则默认为8
+
+# 设置TensorFlow内部并行
+# 控制单个操作内的线程数（如矩阵乘法的并行）- 占用大部分核心
+tf.config.threading.set_intra_op_parallelism_threads(CPU_CORES - 2)  
+
+# 控制独立操作间的线程数（如不同网络层的并行）- 分配少量核心
+tf.config.threading.set_inter_op_parallelism_threads(2)
+
+# 启用混合精度，可能进一步加速（但要确保精度可接受）
+tf.config.optimizer.set_experimental_options({"auto_mixed_precision": True})
+
+print(f"TensorFlow并行配置已启用: {CPU_CORES} 个CPU核心")
+print(f"- 内部操作并行线程: {CPU_CORES - 2}")
+print(f"- 操作间并行线程: 2")
 
 def predict_prefetches(self, stream_id):
     """Make prefetch predictions with enhanced DPF"""
@@ -17,8 +38,14 @@ def predict_prefetches(self, stream_id):
         # Prepare inputs
         inputs = self.prepare_model_inputs(stream_id)
         
-        # Get predictions
-        candidate_logits, offset_logits = self.model.predict(inputs, verbose=0)
+        # Get predictions using optimized prediction if available
+        if hasattr(self, 'optimized_predict'):
+            cluster_history, offset_history, pc, dpf = inputs
+            candidate_logits, offset_logits = self.optimized_predict(
+                cluster_history, offset_history, pc, dpf
+            )
+        else:
+            candidate_logits, offset_logits = self.model.predict(inputs, verbose=0)
         
         # Get trigger page and offset
         trigger_page = self.page_history[stream_id][-1]
@@ -131,24 +158,39 @@ def create_cache_key(self, stream_id):
     return (recent_pages, recent_offsets, pc_hash, full_history_hash)
 
 def optimize_model_for_inference(self):
-    """优化TensorFlow模型以加速推理"""
+    """优化TensorFlow模型以加速推理（并行版）"""
     if self.model is None:
         return False
         
     try:
-        # 使用tf.function预编译预测图
-        @tf.function(input_signature=[
-            tf.TensorSpec(shape=[None, self.config.get('history_length', 16)], dtype=tf.int32),
-            tf.TensorSpec(shape=[None, self.config.get('history_length', 16)], dtype=tf.int32),
-            tf.TensorSpec(shape=[None, 1], dtype=tf.int32),
-            tf.TensorSpec(shape=[None, self.config.get('num_candidates', 4)], dtype=tf.float32)
-        ])
+        # 显式设置TensorFlow线程设置
+        num_cores = os.cpu_count() or 8
+        tf.config.threading.set_intra_op_parallelism_threads(num_cores - 2)
+        tf.config.threading.set_inter_op_parallelism_threads(2)
+        
+        # 输入签名的高效定义
+        # 动态处理批量大小，适应任意批量
+        @tf.function
         def optimized_predict(cluster_history, offset_history, pc, dpf):
             return self.model([cluster_history, offset_history, pc, dpf], training=False)
         
         # 使用编译后的函数替换模型的predict方法
         self.optimized_predict = optimized_predict
-        print("Model optimized for inference")
+        
+        # 预热函数，确保编译发生
+        # 创建小批量测试数据进行预热
+        hist_len = self.config.get('history_length', 16)
+        num_cand = self.config.get('num_candidates', 4)
+        
+        test_cluster_history = tf.zeros([1, hist_len], dtype=tf.int32)
+        test_offset_history = tf.zeros([1, hist_len], dtype=tf.int32)
+        test_pc = tf.zeros([1, 1], dtype=tf.int32)
+        test_dpf = tf.zeros([1, num_cand], dtype=tf.float32)
+        
+        # 预热函数以编译图
+        _ = optimized_predict(test_cluster_history, test_offset_history, test_pc, test_dpf)
+        
+        print("Model optimized for inference with parallel execution")
         return True
     except Exception as e:
         print(f"Could not optimize model: {e}")
@@ -265,9 +307,19 @@ def _process_model_outputs(self, candidate_logits, offset_logits, stream_id):
     # 限制每个ID的最大预取数
     return prefetch_addresses[:self.config.get('max_prefetches_per_id', 2)]
 
-def generate_optimized(self, data):
+def get_cpu_utilization():
+    """获取当前CPU利用率（所有核心）"""
+    try:
+        # 尝试使用psutil获取CPU利用率
+        if 'psutil' in globals():
+            return psutil.cpu_percent(interval=0.1, percpu=True)
+        return None
+    except:
+        return None
+
+def generate_optimized_parallel(self, data):
     """
-    优化版的generate方法，使用批处理和智能缓存进行加速
+    利用TensorFlow内部并行的优化版generate方法
     
     Args:
         data: 内存访问轨迹，格式为[(instr_id, cycle_count, load_addr, load_ip, llc_hit), ...]
@@ -275,8 +327,9 @@ def generate_optimized(self, data):
     Returns:
         预取列表，格式为[(instr_id, prefetch_addr), ...]
     """
-    print("\n=== Using optimized CruiseFetchPro.generate ===")
+    print("\n=== Using CPU-optimized CruiseFetchPro.generate with TensorFlow internal parallelism ===")
     print(f"Model configuration: {self.config}")
+    print(f"CPU Cores: {CPU_CORES}")
     
     # 保存原始矩阵监控方法
     original_monitor_method = self._monitor_matrices_usage
@@ -290,7 +343,9 @@ def generate_optimized(self, data):
         print(f"Model optimization {'succeeded' if model_optimized else 'failed'}")
     
     prefetches = []
-    batch_size = min(64, len(data) // 10 + 1)  # 动态批处理大小，不超过数据集大小的10%
+    # 增加批处理大小以更好地利用并行能力
+    # 但仍然保持批大小在合理范围内以避免内存问题
+    batch_size = min(256, len(data) // 10 + 1)  
     print(f"Using batch size: {batch_size}")
     
     # 初始化缓存系统
@@ -312,15 +367,17 @@ def generate_optimized(self, data):
     batch_pc = []
     batch_dpf = []
     
-    # 计时器
+    # 计时器和监控变量
     start_time = time.time()
     last_report_time = start_time
-    report_interval = 10.0  # 每10秒报告一次进度
+    report_interval = 5.0  # 每5秒报告一次进度
+    last_cpu_check_time = start_time
+    cpu_check_interval = 15.0  # 每15秒检查一次CPU利用率
     
     try:
         for idx, (instr_id, cycle_count, load_addr, load_ip, llc_hit) in enumerate(data):
             # 进度报告
-            if start_time and last_report_time and time.time() - last_report_time > report_interval:
+            if time.time() - last_report_time > report_interval:
                 elapsed = time.time() - start_time
                 percent_done = (idx + 1) / len(data) * 100
                 records_per_sec = (idx + 1) / elapsed
@@ -330,6 +387,14 @@ def generate_optimized(self, data):
                       f"Speed: {records_per_sec:.1f} recs/s - "
                       f"ETA: {eta_seconds/60:.1f} min")
                 last_report_time = time.time()
+                
+                # 周期性检查CPU利用率
+                if time.time() - last_cpu_check_time > cpu_check_interval:
+                    cpu_usage = get_cpu_utilization()
+                    if cpu_usage:
+                        avg_usage = sum(cpu_usage) / len(cpu_usage)
+                        print(f"CPU Utilization: {avg_usage:.1f}% (avg), {cpu_usage}")
+                    last_cpu_check_time = time.time()
             
             # 跳过已达最大预取次数的指令
             if instr_id in self.stats['prefetches_per_instr'] and \
@@ -386,65 +451,55 @@ def generate_optimized(self, data):
                     miss_count = len(batch_inputs['cache_misses'])
                     if miss_count > 0 and self.model is not None:
                         try:
-                            # 如果批量太大，分割成更小的批次处理
-                            max_sub_batch = 32  # TensorFlow通常在较小批次上更稳定
-                            for sub_batch_start in range(0, miss_count, max_sub_batch):
-                                sub_batch_end = min(sub_batch_start + max_sub_batch, miss_count)
-                                sub_batch_indices = batch_inputs['cache_misses'][sub_batch_start:sub_batch_end]
+                            # 将所有未命中项目的输入合并为张量
+                            # 注意：使用tf.convert_to_tensor加速数据传输
+                            model_inputs = [
+                                tf.convert_to_tensor(np.stack([batch_cluster_history[i] for i in range(miss_count)]), dtype=tf.int32),
+                                tf.convert_to_tensor(np.stack([batch_offset_history[i] for i in range(miss_count)]), dtype=tf.int32),
+                                tf.convert_to_tensor(np.stack([batch_pc[i] for i in range(miss_count)]), dtype=tf.int32),
+                                tf.convert_to_tensor(np.stack([batch_dpf[i] for i in range(miss_count)]), dtype=tf.float32)
+                            ]
+                            
+                            # 批量获取预测结果
+                            if model_optimized and hasattr(self, 'optimized_predict'):
+                                # 使用优化的预测函数
+                                batch_candidate_logits, batch_offset_logits = self.optimized_predict(*model_inputs)
+                            else:
+                                # 使用标准预测
+                                batch_candidate_logits, batch_offset_logits = self.model.predict(
+                                    model_inputs, verbose=0
+                                )
+                            
+                            # 处理每个预测结果
+                            for batch_idx, miss_idx in enumerate(batch_inputs['cache_misses']):
+                                stream_id = batch_inputs['stream_ids'][miss_idx]
+                                cache_key = batch_inputs['cache_keys'][miss_idx]
                                 
-                                if not sub_batch_indices:
-                                    continue
+                                # 处理预测以获取预取地址
+                                predicted_prefetches = _process_model_outputs(
+                                    self,
+                                    batch_candidate_logits[batch_idx:batch_idx+1],
+                                    batch_offset_logits[batch_idx:batch_idx+1],
+                                    stream_id
+                                )
                                 
-                                # 准备子批次的模型输入
-                                sub_batch_indices_in_original = [batch_inputs['cache_misses'][i] for i in range(sub_batch_start, sub_batch_end)]
+                                # 计算预测置信度
+                                confidence = float(tf.reduce_max(tf.nn.softmax(batch_candidate_logits[batch_idx])).numpy())
                                 
-                                model_inputs = [
-                                    np.stack([batch_cluster_history[i-sub_batch_start] for i in range(sub_batch_start, sub_batch_end)]),
-                                    np.stack([batch_offset_history[i-sub_batch_start] for i in range(sub_batch_start, sub_batch_end)]),
-                                    np.stack([batch_pc[i-sub_batch_start] for i in range(sub_batch_start, sub_batch_end)]),
-                                    np.stack([batch_dpf[i-sub_batch_start] for i in range(sub_batch_start, sub_batch_end)])
-                                ]
-                                
-                                # 批量获取预测结果
-                                if model_optimized and hasattr(self, 'optimized_predict'):
-                                    # 使用优化的预测函数
-                                    batch_candidate_logits, batch_offset_logits = self.optimized_predict(*model_inputs)
-                                else:
-                                    # 使用标准预测
-                                    batch_candidate_logits, batch_offset_logits = self.model.predict(
-                                        model_inputs, verbose=0
-                                    )
-                                
-                                # 处理每个预测结果
-                                for batch_idx, miss_idx in enumerate(sub_batch_indices_in_original):
-                                    stream_id = batch_inputs['stream_ids'][miss_idx]
-                                    cache_key = batch_inputs['cache_keys'][miss_idx]
+                                # 只缓存高置信度预测
+                                if confidence > 0.5:  # 可配置的置信度阈值
+                                    # 添加到缓存，使用LRU策略管理缓存大小
+                                    if len(self.prediction_cache) >= self.max_cache_size:
+                                        # 随机删除1%的缓存项以释放空间
+                                        keys_to_remove = random.sample(
+                                            list(self.prediction_cache.keys()), 
+                                            max(1, int(len(self.prediction_cache) * 0.01))
+                                        )
+                                        for key in keys_to_remove:
+                                            del self.prediction_cache[key]
                                     
-                                    # 处理预测以获取预取地址
-                                    predicted_prefetches = _process_model_outputs(
-                                        self,
-                                        batch_candidate_logits[batch_idx:batch_idx+1],
-                                        batch_offset_logits[batch_idx:batch_idx+1],
-                                        stream_id
-                                    )
-                                    
-                                    # 计算预测置信度
-                                    confidence = np.max(tf.nn.softmax(batch_candidate_logits[batch_idx]).numpy())
-                                    
-                                    # 只缓存高置信度预测
-                                    if confidence > 0.5:  # 可配置的置信度阈值
-                                        # 添加到缓存，使用LRU策略管理缓存大小
-                                        if len(self.prediction_cache) >= self.max_cache_size:
-                                            # 随机删除1%的缓存项以释放空间
-                                            keys_to_remove = random.sample(
-                                                list(self.prediction_cache.keys()), 
-                                                max(1, int(len(self.prediction_cache) * 0.01))
-                                            )
-                                            for key in keys_to_remove:
-                                                del self.prediction_cache[key]
-                                        
-                                        # 添加到缓存
-                                        self.prediction_cache[cache_key] = predicted_prefetches
+                                    # 添加到缓存
+                                    self.prediction_cache[cache_key] = predicted_prefetches
                         except Exception as e:
                             print(f"Error in batch prediction: {e}")
                             # 记录缓存未命中的项目，回退到默认预测
@@ -502,12 +557,25 @@ def generate_optimized(self, data):
             records_per_sec = len(data) / total_time
             print(f"Total processing time: {total_time:.2f} seconds")
             print(f"Average speed: {records_per_sec:.1f} records/second")
+            
+            # 显示最终CPU利用率
+            final_cpu_usage = get_cpu_utilization()
+            if final_cpu_usage:
+                avg_usage = sum(final_cpu_usage) / len(final_cpu_usage)
+                print(f"Final CPU Utilization: {avg_usage:.1f}% (avg), {final_cpu_usage}")
     
     except Exception as e:
-        print(f"Error in generate_optimized: {e}")
+        print(f"Error in generate_optimized_parallel: {e}")
+        import traceback
+        traceback.print_exc()
     
     finally:
         # 恢复原始矩阵监控方法
         self._monitor_matrices_usage = original_monitor_method
     
     return prefetches
+
+# 用这个新函数替换原始的generate_optimized函数
+def generate_optimized(self, data):
+    """兼容性包装函数，调用并行优化版本"""
+    return generate_optimized_parallel(self, data)

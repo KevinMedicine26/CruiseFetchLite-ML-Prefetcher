@@ -6,7 +6,7 @@ import pickle
 import lzma
 import yaml
 from typing import List, Tuple, Dict, Any, Optional
-from generate_optimized import generate_optimized
+from generate_module import generate_optimized
 
 # This model is my Edit virsion for CFpro
 

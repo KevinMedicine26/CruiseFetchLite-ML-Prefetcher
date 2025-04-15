@@ -10,6 +10,7 @@ To enter
 docker-compose exec champsim bash
 
 进入容器并使脚本可执行：
+chmod +x generate_module.py
 chmod +x autorunCFlite.sh
 在容器内运行脚本：
   ./autorunCFlite.sh
