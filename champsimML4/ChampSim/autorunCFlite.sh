@@ -25,6 +25,7 @@ CONFIG_FILE="./model_config/cruisefetch_config_sen_cluster.yml"  # YAML configur
 WARMUP_TRAIN=20     # Number of warmup instructions for training
 WARMUP_GENERATE=20  # Number of warmup instructions for generating
 USE_NO_BASE=true    # Whether to use --no-base option in testing (true/false)
+SKIP_TRAIN=true    # Whether to skip the training stage (true/false)
 
 #------------------------------------
 # UTILITY FUNCTIONS - DO NOT MODIFY
@@ -111,12 +112,16 @@ fi
 # MAIN EXECUTION
 #------------------------------------
 
-echo "===== STEP 1: TRAINING MODEL ====="
-echo "Running: python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN"
-python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN
-check_success
-clear_memory
-countdown 10
+if [ "$SKIP_TRAIN" != "true" ]; then
+    echo "===== STEP 1: TRAINING MODEL ====="
+    echo "Running: python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN"
+    python3 ml_prefetch_sim.py train $TRACE_TRAIN --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_TRAIN
+    check_success
+    clear_memory
+    countdown 10
+else
+    echo "Skipping training stage as requested."
+fi
 
 echo "===== STEP 2: GENERATING PREFETCHES ====="
 echo "Running: python3 ml_prefetch_sim.py generate $TRACE_GENERATE $PREFETCH_FILE --model $MODEL --config $CONFIG_FILE --num-prefetch-warmup-instructions $WARMUP_GENERATE"

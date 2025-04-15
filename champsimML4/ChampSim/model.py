@@ -6,6 +6,7 @@ import pickle
 import lzma
 import yaml
 from typing import List, Tuple, Dict, Any, Optional
+from generate_optimized import generate_optimized
 
 # This model is my Edit virsion for CFpro
 
@@ -589,113 +590,6 @@ class CruiseFetchPro(MLPrefetchModel):
         # Fallback to sequential prediction
         return [(trigger_page + 1, 100), (trigger_page + 2, 50)]
     
-    def predict_prefetches(self, stream_id):
-        """Make prefetch predictions with enhanced DPF"""
-        if self.model is None or self.page_history[stream_id][-1] == 0:
-            return self.default_predictions(stream_id)
-        
-        try:
-            # Prepare inputs
-            inputs = self.prepare_model_inputs(stream_id)
-            
-            # Get predictions
-            candidate_logits, offset_logits = self.model.predict(inputs, verbose=0)
-            
-            # Get trigger page and offset
-            trigger_page = self.page_history[stream_id][-1]
-            trigger_offset = self.offset_history[stream_id][-1]
-            
-            # Get top-2 candidate indices and their probabilities
-            candidate_probs = tf.nn.softmax(candidate_logits[0]).numpy()
-            # Exclude the "no prefetch" option (last index) when finding top candidates
-            valid_probs = candidate_probs[:-1]  
-            top_candidate_indices = np.argsort(valid_probs)[-2:][::-1]  # Get top 2 in descending order
-            
-            # Get top-2 offset indices
-            offset_probs = tf.nn.softmax(offset_logits[0]).numpy()
-            top_offset_indices = np.argsort(offset_probs)[-2:][::-1]  # Get top 2 in descending order
-            
-            # Get candidate pages
-            candidate_pages = self.metadata_manager.get_candidate_pages(trigger_page)
-            
-            # Check for cross-page boundary patterns
-            is_near_boundary = (trigger_offset >= (64 - self.metadata_manager.boundary_region_size) or 
-                               trigger_offset < self.metadata_manager.boundary_region_size)
-            
-            # List to store prefetch addresses
-            prefetch_addresses = []
-            
-            # If near boundary, check for cross-page transitions first
-            if is_near_boundary and self.metadata_manager and hasattr(self.metadata_manager, 'get_cross_page_predictions'):
-                cross_page_predictions = self.metadata_manager.get_cross_page_predictions(trigger_page, trigger_offset)
-                prefetch_addresses.extend(cross_page_predictions[:self.config['max_prefetches_per_id']])
-            
-            # If we still have room for prefetches, use the normal prediction logic
-            if len(prefetch_addresses) < self.config['max_prefetches_per_id']:
-                # First strategy: Top candidate with top offset
-                if len(top_candidate_indices) > 0 and top_candidate_indices[0] < len(candidate_pages):
-                    selected_page, confidence = candidate_pages[top_candidate_indices[0]]
-                    if self.metadata_manager.should_prefetch(trigger_page, selected_page):
-                        # Create prefetch with top candidate page and top offset
-                        prefetch_cache_line = (selected_page << self.config['offset_bits']) | top_offset_indices[0]
-                        prefetch_addr = prefetch_cache_line << 6
-                        
-                        # Only add if not already present
-                        if prefetch_addr not in prefetch_addresses:
-                            prefetch_addresses.append(prefetch_addr)
-                
-                # Second strategy: Either second candidate page or first candidate with second offset
-                if len(prefetch_addresses) < self.config['max_prefetches_per_id']:
-                    # Try second candidate page with top offset first (if available)
-                    if len(top_candidate_indices) > 1 and top_candidate_indices[1] < len(candidate_pages):
-                        selected_page, confidence = candidate_pages[top_candidate_indices[1]]
-                        if self.metadata_manager.should_prefetch(trigger_page, selected_page):
-                            prefetch_cache_line = (selected_page << self.config['offset_bits']) | top_offset_indices[0]
-                            prefetch_addr = prefetch_cache_line << 6
-                            # Only add if it's different from existing prefetches
-                            if prefetch_addr not in prefetch_addresses:
-                                prefetch_addresses.append(prefetch_addr)
-                    
-                    # If still don't have a second prefetch, try first candidate with second offset
-                    if len(prefetch_addresses) < self.config['max_prefetches_per_id'] and len(top_offset_indices) > 1:
-                        if len(top_candidate_indices) > 0 and top_candidate_indices[0] < len(candidate_pages):
-                            selected_page, confidence = candidate_pages[top_candidate_indices[0]]
-                            prefetch_cache_line = (selected_page << self.config['offset_bits']) | top_offset_indices[1]
-                            prefetch_addr = prefetch_cache_line << 6
-                            # Only add if it's different from existing prefetches
-                            if prefetch_addr not in prefetch_addresses:
-                                prefetch_addresses.append(prefetch_addr)
-            
-            # Record prefetch results for adapting position weights
-            if self.metadata_manager and hasattr(self.metadata_manager, 'record_prefetch_result'):
-                for i, addr in enumerate(prefetch_addresses[:2]):  # Only track first two positions
-                    # We don't know hit/miss yet, but we'll use this to mark that we issued a prefetch
-                    # Later we could add a proper feedback mechanism
-                    self.metadata_manager.record_prefetch_result(i, True)
-            
-            # If no prefetches were generated, fall back to default predictions
-            if not prefetch_addresses:
-                return self.default_predictions(stream_id)
-                
-            # Limit to max prefetches per ID
-            return prefetch_addresses[:self.config['max_prefetches_per_id']]
-            
-        except Exception as e:
-            print(f"Error making prediction: {e}")
-            return self.default_predictions(stream_id)
-    
-    def default_predictions(self, stream_id):
-        """Generate default predictions when model is unavailable"""
-        # Simple next-line prefetcher
-        trigger_page = self.page_history[stream_id][-1]
-        trigger_offset = self.offset_history[stream_id][-1]
-        
-        # Prefetch next two cache lines
-        prefetch1 = ((trigger_page << self.config['offset_bits']) | ((trigger_offset + 1) % self.config['offset_size'])) << 6
-        prefetch2 = ((trigger_page << self.config['offset_bits']) | ((trigger_offset + 2) % self.config['offset_size'])) << 6
-        
-        return [prefetch1, prefetch2]
-    
     def train(self, data):
         """
         Train the model on the given trace data
@@ -835,7 +729,7 @@ class CruiseFetchPro(MLPrefetchModel):
     
     def generate(self, data):
         """
-        Generate prefetches for the given trace data
+        Generate prefetches for the given trace data,using generate_optimized
         
         Args:
             data: List of (instr_id, cycle_count, load_addr, load_ip, llc_hit) tuples
@@ -843,46 +737,8 @@ class CruiseFetchPro(MLPrefetchModel):
         Returns:
             List of (instr_id, prefetch_addr) tuples
         """
-        print("\n=== Using CruiseFetchPro.generate from model.py ===")
-        print(f"Model configuration: {self.config}")
-        
-        # Process data in streaming fashion
-        prefetches = []
-        processed_ids = set()
-        
-        for instr_id, cycle_count, load_addr, load_ip, llc_hit in data:
-            # Skip if we've reached the maximum prefetches for this ID
-            if instr_id in self.stats['prefetches_per_instr'] and \
-               self.stats['prefetches_per_instr'][instr_id] >= self.config['max_prefetches_per_id']:
-                continue
-            
-            # Process the memory access
-            self.process_trace_entry(instr_id, cycle_count, load_addr, load_ip, llc_hit)
-            
-            # Get stream ID
-            stream_id = self.get_stream_id(load_ip)
-            
-            # Generate prefetches for this access
-            predicted_prefetches = self.predict_prefetches(stream_id)
-            
-            # Add prefetches to output
-            for prefetch_addr in predicted_prefetches:
-                # Skip if we've reached the maximum prefetches for this ID
-                if instr_id in self.stats['prefetches_per_instr'] and \
-                   self.stats['prefetches_per_instr'][instr_id] >= self.config['max_prefetches_per_id']:
-                    break
-                
-                # Add prefetch
-                prefetches.append((instr_id, prefetch_addr))
-                
-                # Update stats
-                self.stats['prefetches_issued'] += 1
-                if instr_id not in self.stats['prefetches_per_instr']:
-                    self.stats['prefetches_per_instr'][instr_id] = 0
-                self.stats['prefetches_per_instr'][instr_id] += 1
-        
-        print(f"Generated {len(prefetches)} prefetches for {len(data)} memory accesses")
-        return prefetches
+
+        return generate_optimized(self, data)
     
     def get_stream_id(self, pc):
         """Get stream ID for a PC value"""
