@@ -50,18 +50,15 @@ RUN pip3 install --no-cache-dir --upgrade pip && \
     pandas \
     pyyaml \
     scikit-learn \
-    tensorrt==8.5.3.1
-
+    tensorrt==8.5.3.1 \
+    psutil
+    
 # Copy ChampSim repository
 COPY ChampSim /app/ChampSim
 
 # Fix line endings and make scripts executable
 RUN find /app/ChampSim -name "*.sh" -exec dos2unix {} \; && \
     chmod +x /app/ChampSim/*.sh
-
-# Build ChampSim
-WORKDIR /app/ChampSim
-RUN ./build_champsim.sh hashed_perceptron no no no no lru 1
 
 # Create directory for traces
 RUN mkdir -p /app/ChampSim/traces
