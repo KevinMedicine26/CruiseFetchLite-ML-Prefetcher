@@ -108,10 +108,10 @@ class CruiseFetchPro(MLPrefetchModel):
         }
         
         # Memory management parameters from config
-        self.matrices_max_entries = self.config.get('max_matrices', 128000)  # 非常宽松的限制(约2GB)
-        self.matrices_warning_threshold = self.config.get('warning_threshold', 100000)  # 警告阈值(约1.6GB)
-        self.matrices_access_timestamps = {}  # 跟踪访问时间
-        self.matrices_current_timestamp = 0  # 时间戳计数器
+        self.matrices_max_entries = self.config.get('max_matrices', 128000)  
+        self.matrices_warning_threshold = self.config.get('warning_threshold', 100000)  )
+        self.matrices_access_timestamps = {}   
+        self.matrices_current_timestamp = 0  
     
     # Load configuration from YAML file
     def load_config(self, config_path):
@@ -180,7 +180,7 @@ class CruiseFetchPro(MLPrefetchModel):
             try:
                 with lzma.open(f"{path}_page_metadata.xz", "rb") as f:
                     page_metadata = pickle.load(f)
-                    # 使用配置驱动设计 - 通过config对象初始化所有管理器
+                    # Use configuration-driven design - initialize all managers via config object
                     self.metadata_manager = DPFMetadataManager(self.config)
                     self.metadata_manager.page_metadata = page_metadata
                     print(f"Loaded page metadata with {len(page_metadata)} pages")
@@ -405,26 +405,26 @@ class CruiseFetchPro(MLPrefetchModel):
             curr_page = page_id
             curr_offset = offset
             
-            # 初始化矩阵如果需要
+            # Initialize matrix if needed
             if prev_page != 0:
-                # 更新时间戳
+                # Update timestamp
                 self.matrices_current_timestamp += 1
                 
-                # 初始化矩阵如果不存在
+                # Initialize matrix if it doesn't exist
                 if prev_page not in self.offset_transition_matrices:
-                    # 检查是否需要管理大小 - 非常宽松的检查
+                    # Check if matrix needs management
                     self._monitor_matrices_usage()
                     
-                    # 创建新矩阵
+                    # Create new matrix
                     self.offset_transition_matrices[prev_page] = np.zeros(
                         (self.config['offset_size'], self.config['offset_size']), 
                         dtype=np.int32
                     )
                 
-                # 更新时间戳
+                # Update access timestamp
                 self.matrices_access_timestamps[prev_page] = self.matrices_current_timestamp
                 
-                # 更新矩阵
+                # Update matrix
                 self.offset_transition_matrices[prev_page][prev_offset, curr_offset] += 1
         
         # Update metadata
@@ -476,7 +476,7 @@ class CruiseFetchPro(MLPrefetchModel):
             distances = np.linalg.norm(feature - self.kmeans_centroids, axis=1)
             cluster_id = int(np.argmin(distances))
         elif page_id in self.clustering_info:
-            # 即使矩阵被移除，也返回缓存的聚类 ID
+            # Even if matrix is removed, return cached cluster ID
             cluster_id = self.clustering_info[page_id]['cluster_id']
             return cluster_id
         else:

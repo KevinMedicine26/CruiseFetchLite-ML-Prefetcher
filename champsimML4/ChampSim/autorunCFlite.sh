@@ -15,17 +15,17 @@ TRACE_GENERATE="./traces/605.mcf-s1.txt.xz"  # Trace file for generating prefetc
 TRACE_TEST="./traces/605.mcf-s1.trace.xz"    # Trace file for testing
 
 # Model and prefetch files
-MODEL="./prefetch_files/model605-cruisefetchpro-sen-cluster-605s0-2"  # Path to save/load model
-PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro-sen-cluster-2.txt"  # Path for generated prefetches
+MODEL="./prefetch_files/model605-cruisefetchpro-base2-605s0"  # Path to save/load model
+PREFETCH_FILE="./prefetch_files/prefetches_605s1-cruisefetchpro-base2.txt"  # Path for generated prefetches
 
 # Configuration file
-CONFIG_FILE="./model_config/cruisefetch_config_sen_cluster.yml"  # YAML configuration file path
+CONFIG_FILE="./model_config/cruisefetch_config_base.yml"  # YAML configuration file path
 
 # Parameters
 WARMUP_TRAIN=20     # Number of warmup instructions for training
 WARMUP_GENERATE=20  # Number of warmup instructions for generating
-USE_NO_BASE=true    # Whether to use --no-base option in testing (true/false)
-SKIP_TRAIN=true    # Whether to skip the training stage (true/false)
+USE_NO_BASE=false    # Whether to use --no-base option in testing (true/false)
+SKIP_TRAIN=false    # Whether to skip the training stage (true/false)
 
 #------------------------------------
 # UTILITY FUNCTIONS - DO NOT MODIFY
