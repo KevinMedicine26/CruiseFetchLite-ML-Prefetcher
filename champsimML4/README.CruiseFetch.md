@@ -1,5 +1,11 @@
-debug: 
-cat autorunCFlite.sh | tr -d '\r' > autorunCFlite_fixed.sh
+# Welcome to CruiseFetchLitePro-ML-Prefetcher
+
+# Download the traces:
+in the download links, put traces in the folder Traces
+
+txt.xz  for training. 
+.xz for testing.
+
 ## Building the Docker Container
 docker-compose build
 ## Running the Docker Container
@@ -9,13 +15,25 @@ docker-compose up -d
 To enter 
 docker-compose exec champsim bash
 
-进入容器并使脚本可执行：
+Make the scripts executable in the container:
 chmod +x generate_module.py
 chmod +x autorunCFlite.sh
-在容器内运行脚本：
+
+In the container, run the script:
   ./autorunCFlite.sh
 
+PS:
+The test results will be in the folder results.
+The model file trained will be in the folder prefetch_files.
 
+Model setting in the model_config.
+
+Enjoy Prefetching!
+
+legacy instructions(backup):
+
+debug: 
+cat autorunCFlite.sh | tr -d '\r' > autorunCFlite_fixed.sh
 1. Open a terminal or command prompt
 2. Navigate to the project directory where `Dockerfile` is located
 3. Run the following command to build the Docker image:
