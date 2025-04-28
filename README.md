@@ -2,6 +2,10 @@ CruiseFetchLITE (CFlite): ML-Based Memory Prefetcher
 
 CruiseFetchLITE is an intelligent, ML-driven memory prefetcher designed for the ChampSim simulator framework. This prefetcher combines neural network techniques with behavioral clustering to accurately predict memory access patterns and improve system performance.
 
+Key Elements:
+The core file of this model is model.py and generate_moudule.py(using model to make prefetch for next test step) . The config files of model training are in the folder :config. 
+Auto exe using autoRunCFlite.sh
+
 Features
 
 Rescource frienly :)
