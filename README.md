@@ -6,6 +6,8 @@ Key Elements:
 The core file of this model is model.py and generate_moudule.py(using model to make prefetch for next test step) . The config files of model training are in the folder :config. 
 Auto exe using autoRunCFlite.sh
 
+For more Running instructions, please refer:README.CruiseFetch.md
+
 Features
 
 Rescource frienly :)
